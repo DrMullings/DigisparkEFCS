@@ -1,140 +1,108 @@
-#include <Bounce2.h>
-
-
+#include "Arduino.h"
 /*******************************************************************************
-	TODOs
+Settings
 *******************************************************************************/
 
-//TODO Hall sensor on interrupt
+#define IS_AN94	1			// Is EFCS used for Abakan
+
+#ifdef IS_AN94
+#define BURST_CNT 2			// DO NOT TOUCH
+#else
+#define BURST_CNT 3			// Set Burst here
+#endif
 
 /*******************************************************************************
-	Settings
+Pins
 *******************************************************************************/
 
-/*
-	Misc
-*/
-#define _burst 2
+// do not change!
+#define PIN_TRG 7			// Trigger
 
-/*
-	Pins
-*/
-#define PIN_TRIGGER 2								// Trigger
-#define PIN_COL 1									// COL
-#define PIN_BURST 5									// Burst
-#define PIN_FET 0									// MosfetGate
-#define PIN_FA 4									// Full Auto
+// set according your setup
+#define PIN_COL 1			// COL
+#define PIN_SEM 7			// Semi
+#define PIN_FET 3			// MosFet Gate
+#define PIN_BRT 4			// Burst
+#define PIN_FLA 5			// Full Auto
+#define PIN_BLT 6			// Bolt Stop
 
-/*
-	Flags
-*/
-bool _triggermerker = false;						// trigger
-bool _coloben = false;								// COL was HIGH
-bool _colmerker = false;							// COL
-bool _colunten = false;								// COL was LOW
-bool _selektburst = false;							// Burstmode
-bool _cyclecomplete = false;						// Cycles
-bool _selektauto = false;							// FA
-bool _burstmode = false;							// Burst
-int _cnt_cycles = 0;								// cycles
+/*******************************************************************************
+Global variables
+*******************************************************************************/
 
-Bounce triggerbouncer = Bounce();
-Bounce colbouncer = Bounce();
-Bounce burstbouncer = Bounce();
-Bounce autobouncer = Bounce();
+bool triggerPressed = false;
+int cycleLength = 0;
 
-void setup()
-{
-	pinMode(PIN_TRIGGER, INPUT);
+void setup() {
+	//Pin setup
+	pinMode(PIN_TRG, INPUT);
 	pinMode(PIN_COL, INPUT);
-	pinMode(PIN_FET, OUTPUT);						//Gearbox
-	pinMode(PIN_BURST, INPUT);						//Burst
-	pinMode(PIN_FA, INPUT);							//Auto
-	triggerbouncer.attach(PIN_TRIGGER);
-	triggerbouncer.interval(2);
-	colbouncer.attach(PIN_COL);
-	colbouncer.interval(1);
-	burstbouncer.attach(PIN_BURST);
-	burstbouncer.interval(5);
-	autobouncer.attach(PIN_FA);
-	autobouncer.interval(4);
+	pinMode(PIN_BRT, INPUT);
+	pinMode(PIN_FLA, INPUT);
+	pinMode(PIN_FET, OUTPUT);
+
+	//initialize Pins with LOW
+	digitalWrite(PIN_FET, LOW);
+	digitalWrite(PIN_TRG, LOW);
+	digitalWrite(PIN_BRT, LOW);
+	digitalWrite(PIN_FLA, LOW);
+	digitalWrite(PIN_COL, LOW);
+
+	attachInterrupt(0, isr, RISING);
 }
 
-void loop()
-{
-	triggerbouncer.update();
-	_triggermerker = triggerbouncer.read();
-	colbouncer.update();
-	_colmerker = colbouncer.read();
-	autobouncer.update();
-	_selektauto = autobouncer.read();
-	burstbouncer.update();
-	_selektburst = burstbouncer.read();
+void loop() {
+	if (triggerPressed) {
 
-	/*
-		Overly complex semi auto cycling by Meeseeks
-		Will be touched unethically later
-		Srsly WTF?
-	*/
+		if (is_semi()) {
+			cycle();
+		}
+		else if (is_burst()) {
+			for (int i = 0; i < BURST_CNT; i++) {
+				cycle();
+			}
+		}
+		else if (is_full()) {
+#ifdef IS_AN94
+			cycle();
+			cycle();
+			while (digitalRead(PIN_TRG)) {
+				cycle();
+				// 60 sec for 600 rounds
+				// 0,1 sec per round
+				// 100 ms per round
+				// 10 RPS minimum
+				delay(100-cycleLength);
+			}
+#else
+			while (digitalRead(PIN_TRG)) {
+				cycle();
+		}
+#endif
+		}
+		else {
+			// we should never get here
+		}
 
-	if ((PIN_TRIGGER == HIGH) && (_cyclecomplete = false)) {
-		digitalWrite(PIN_FET, HIGH);
-	}                                                               
-	else
-	{
-		digitalWrite(PIN_FET, LOW);
-	}                                                                   
-
-	if (_colmerker == LOW) { _coloben = true; }								// Hall sensor is triggered
-		                                                                        
-	
-	if ((_coloben == true) && (_colmerker == HIGH)) { _colunten = true; }	// Hall sensor is low after triggered
-
-	// cycle completed, COL was on top and isn't anymore
-	if ((_coloben == true) && (_colunten == true)) {                                                
-		_cnt_cycles++;
-		_coloben = false;
-		_colunten = false;
-		_cyclecomplete = true;
+		triggerPressed = false;
 	}
-
-	if ((PIN_TRIGGER == LOW) && (PIN_FET == LOW) && (_cyclecomplete = true)) {
-		_cyclecomplete = false;
-	}
-
-	/*
-		Full dakka mode
-	*/
-
-	if (PIN_FA == HIGH) { _selektauto = true; }
-
-	else { (_selektauto = false); }
-
-
-	if ((PIN_TRIGGER == HIGH) && (_selektauto = true)) {
-		digitalWrite(PIN_FET, HIGH);
-	}
-
-	else { digitalWrite(PIN_FET, LOW); }
-
-
-	if (PIN_BURST == HIGH) { (_selektburst = true); }
-	else { _selektburst = false; }
-
-	if ((_selektburst = true) && (_cnt_cycles <= _burst)) {
-		_burstmode = true;
-	}
-	else { _burstmode = false; }
-
-	if (((_selektburst = true) && (PIN_TRIGGER == HIGH) && (_burstmode = true))) {
-		digitalWrite(PIN_FET, HIGH);
-	}
-
-	else { digitalWrite(PIN_FET, LOW); }
-
-
-	if ((PIN_TRIGGER == LOW) && (_cnt_cycles >= _burst)) {
-		_cnt_cycles = 0;
-	}
-
 }
+
+inline void cycle() {
+	int startCycle = millis();
+	digitalWrite(PIN_FET, HIGH);
+	while (!digitalRead(PIN_COL)) {
+		// if we cycle longer than 5 seconds something went wrong
+		if (millis() - startCycle > 5000) {
+			//error handling here
+		}
+	}
+	digitalWrite(PIN_FET, LOW);
+	int endCycle = millis();
+	cycleLength = endCycle - startCycle;
+}
+
+void isr() { triggerPressed = true; }
+inline bool is_semi() { return digitalRead(PIN_SEM); }
+inline bool is_burst() { return digitalRead(PIN_BRT); }
+inline bool is_full() { return digitalRead(PIN_FLA); }

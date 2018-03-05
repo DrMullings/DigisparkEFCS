@@ -74,6 +74,9 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
+      <AdditionalIncludeDirectories>D:\Arduino\IDE\hardware\arduino\avr\cores\arduino;D:\Arduino\IDE\hardware\attiny\avr\variants\tiny8;D:\Eigene Dokumente\Arduino\EFCS;D:\Eigene Dokumente\Arduino\libraries\Bounce2-master;D:\Eigene Dokumente\Arduino\libraries\Bounce2-master\utility;D:\Arduino\IDE\libraries;D:\Arduino\IDE\hardware\arduino\avr\libraries;D:\Arduino\IDE\hardware\attiny\avr\libraries;C:\Program Files (x86)\Microsoft Visual Studio 14.0\Common7\IDE\Extensions\m3xslnsn.vpn\Micro Platforms\default\debuggers;D:\Eigene Dokumente\Arduino\libraries;D:\Arduino\IDE\hardware\tools\avr/avr/include/;D:\Arduino\IDE\hardware\tools\avr//avr/include/avr/;D:\Arduino\IDE\hardware\tools\avr/lib\gcc\avr\4.8.1\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <ForcedIncludeFiles>D:\Eigene Dokumente\Arduino\EFCS\__vm\.EFCS.vsarduino.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <PreprocessorDefinitions>__AVR_ATtiny85__;__AVR_ATTINY85__;F_CPU={build.f_cpu};ARDUINO=10608;ARDUINO_attiny;ARDUINO_ARCH_AVR;__cplusplus=201103L;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
@@ -110,6 +113,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <None Include="EFCS.ino">
+      <FileType>CppCode</FileType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="__vm\.EFCS.vsarduino.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
