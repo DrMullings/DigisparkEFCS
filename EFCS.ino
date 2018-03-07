@@ -5,7 +5,11 @@
 Settings
 *******************************************************************************/
 
-#define IS_AN94	1			// Is EFCS used for Abakan
+//#define IS_AN94	1			// Is EFCS used for Abakan
+//#define IS_ATTINY 1		// Use for Digispark
+//#define IS_SEMI_BURST 1	// Use for Semi/Burst Mode
+#define ENABLE_BURST 1	// Uncomment to enable burst fire
+#define ENABLE_FULLAUTO 1 // Uncomment to enable full auto
 
 #ifdef IS_AN94
 #define BURST_CNT 2			// DO NOT TOUCH
@@ -22,12 +26,17 @@ Pins
 
 // set according your setup
 #define PIN_COL 1			// COL
-#define PIN_SEM 7			// Semi
+#define PIN_SEM 6			// Semi
 #define PIN_FET 3			// MosFet Gate
 #define PIN_BRT 4			// Burst
 #define PIN_FLA 5			// Full Auto
+
+#ifndef IS_ATTINY
 #define PIN_BLT 6			// Bolt Stop
 #define PIN_MSG 8			// Message Pin buzzer or LED
+#endif // !IS_ATTINY
+
+
 
 /*******************************************************************************
 Global constants
@@ -35,9 +44,9 @@ Global constants
 
 // only touch when knowing what to do
 
-#define DEB_TRG 100			// debounce time for trigger
+#define DEB_TRG 50			// debounce time for trigger
 #define DEB_COL 2			// debounce time for COL
-#define MAX_CYC 5000		// maximum cycle time
+#define MAX_CYC 50			// maximum cycle time
 
 #ifdef IS_AN94
 #define RPM_LIM 600		//do not edit
@@ -102,9 +111,20 @@ Loop
 void loop() {
 	if (triggerPressed) {
 
+// SEMI MODE
 		if (is_semi()) {
 			cycle();
+#ifdef SEMI_BURST
+			if (digitalRead(PIN_TRG) == HIGH) {
+				for (int i = 0; i < BURST_CNT; i++) {
+					cycle();
+				}
+			}
+#endif // SEMI_BURST
 		}
+
+// BURST MODE
+#ifdef ENABLE_BURST
 		else if (is_burst()) {
 			for (int i = 0; i < BURST_CNT; i++) {
 				cycle();
@@ -113,6 +133,10 @@ void loop() {
 				}
 			}
 		}
+#endif
+
+// FULL AUTO MODE
+#ifdef ENABLE_FULLAUTO
 		else if (is_full()) {
 #ifdef IS_AN94
 			cycle();
@@ -125,6 +149,9 @@ void loop() {
 				}
 			}
 		}
+#endif
+
+// FUCKUP
 		else {
 			// we should never get here
 			// re-initalize everything
@@ -170,5 +197,13 @@ void isr() {
 }
 
 inline bool is_semi() { return digitalRead(PIN_SEM); }
+
+#ifdef ENABLE_BURST
 inline bool is_burst() { return digitalRead(PIN_BRT); }
+#endif // ENABLE_BURST
+
+#ifdef ENABLE_FULLAUTO
 inline bool is_full() { return digitalRead(PIN_FLA); }
+#endif // ENABLE_FULLAUTO
+
+
