@@ -15,11 +15,11 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <None Include="EFCS.ino" />
-  </ItemGroup>
-  <ItemGroup>
     <ClInclude Include="__vm\.EFCS.vsarduino.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="EFCS.ino" />
   </ItemGroup>
 </Project>

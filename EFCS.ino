@@ -1,4 +1,6 @@
 #include "Arduino.h"
+#include "Bounce2-master\Bounce2.h"
+
 /*******************************************************************************
 Settings
 *******************************************************************************/
@@ -25,31 +27,77 @@ Pins
 #define PIN_BRT 4			// Burst
 #define PIN_FLA 5			// Full Auto
 #define PIN_BLT 6			// Bolt Stop
+#define PIN_MSG 8			// Message Pin buzzer or LED
+
+/*******************************************************************************
+Global constants
+*******************************************************************************/
+
+// only touch when knowing what to do
+
+#define DEB_TRG 100			// debounce time for trigger
+#define DEB_COL 2			// debounce time for COL
+#define MAX_CYC 5000		// maximum cycle time
+
+#ifdef IS_AN94
+#define RPM_LIM 600		//do not edit
+#else
+#define RPM_LIM	0			// RPM Limit - 0=unlimited - edit here
+#endif
+
+Bounce colBouncer = Bounce();
 
 /*******************************************************************************
 Global variables
 *******************************************************************************/
-
+//do not touch
 bool triggerPressed = false;
 int cycleLength = 0;
+int rpmDelay = 0;
+long lastTrigger = -1;
+int errorCnt = 0;
+
+/*******************************************************************************
+Setup
+*******************************************************************************/
+
 
 void setup() {
+
+
 	//Pin setup
-	pinMode(PIN_TRG, INPUT);
-	pinMode(PIN_COL, INPUT);
-	pinMode(PIN_BRT, INPUT);
-	pinMode(PIN_FLA, INPUT);
+	pinMode(PIN_TRG, INPUT_PULLUP);
+	pinMode(PIN_COL, INPUT_PULLUP);
+	pinMode(PIN_BRT, INPUT_PULLUP);
+	pinMode(PIN_FLA, INPUT_PULLUP);
 	pinMode(PIN_FET, OUTPUT);
+	pinMode(PIN_MSG, OUTPUT);
+
+	// if we had an error
+	if (errorCnt > 0) {
+		digitalWrite(PIN_MSG, HIGH);
+		errorCnt = 0;
+	}
+
+	colBouncer.attach(PIN_COL);
+	colBouncer.interval(DEB_COL);
 
 	//initialize Pins with LOW
 	digitalWrite(PIN_FET, LOW);
-	digitalWrite(PIN_TRG, LOW);
-	digitalWrite(PIN_BRT, LOW);
-	digitalWrite(PIN_FLA, LOW);
-	digitalWrite(PIN_COL, LOW);
 
 	attachInterrupt(0, isr, RISING);
+
+	// calculate RPM
+	// 60000ms(=1min) / RPM
+	if (RPM_LIM > 0) {
+		rpmDelay = 60000 / RPM_LIM;
+	}
 }
+
+/*******************************************************************************
+Loop
+*******************************************************************************/
+
 
 void loop() {
 	if (triggerPressed) {
@@ -60,41 +108,51 @@ void loop() {
 		else if (is_burst()) {
 			for (int i = 0; i < BURST_CNT; i++) {
 				cycle();
+				if (RPM_LIM > 0) {
+					delay(rpmDelay - cycleLength);
+				}
 			}
 		}
 		else if (is_full()) {
 #ifdef IS_AN94
 			cycle();
 			cycle();
-			while (digitalRead(PIN_TRG)) {
-				cycle();
-				// 60 sec for 600 rounds
-				// 0,1 sec per round
-				// 100 ms per round
-				// 10 RPS minimum
-				delay(100-cycleLength);
-			}
-#else
-			while (digitalRead(PIN_TRG)) {
-				cycle();
-		}
 #endif
+			while (digitalRead(PIN_TRG)) {
+				cycle();
+				if (RPM_LIM > 0) {
+					delay(rpmDelay - cycleLength);
+				}
+			}
 		}
 		else {
 			// we should never get here
+			// re-initalize everything
+			errorCnt++;
+			setup();
 		}
-
+		// reset trigger
 		triggerPressed = false;
 	}
 }
 
+/*******************************************************************************
+Functions
+*******************************************************************************/
+
+
 inline void cycle() {
 	int startCycle = millis();
 	digitalWrite(PIN_FET, HIGH);
-	while (!digitalRead(PIN_COL)) {
-		// if we cycle longer than 5 seconds something went wrong
-		if (millis() - startCycle > 5000) {
+	while (colBouncer.update() && colBouncer.fell()) {
+
+		// limiting the maximum cycle time
+		if (millis() - startCycle > MAX_CYC) {
 			//error handling here
+			//re-initialize everything
+			errorCnt++;
+			setup();
+			break;
 		}
 	}
 	digitalWrite(PIN_FET, LOW);
@@ -102,7 +160,15 @@ inline void cycle() {
 	cycleLength = endCycle - startCycle;
 }
 
-void isr() { triggerPressed = true; }
+void isr() { 
+	int currTrigger = millis();
+	// debouncing
+	if (currTrigger - lastTrigger < DEB_TRG) {
+		triggerPressed = true;
+	}
+	lastTrigger = currTrigger;
+}
+
 inline bool is_semi() { return digitalRead(PIN_SEM); }
 inline bool is_burst() { return digitalRead(PIN_BRT); }
 inline bool is_full() { return digitalRead(PIN_FLA); }
