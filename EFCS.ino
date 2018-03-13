@@ -5,11 +5,12 @@
 Settings
 *******************************************************************************/
 
-//#define IS_AN94	1			// Is EFCS used for Abakan
+#define IS_AN94	1		// Is EFCS used for Abakan
 //#define IS_ATTINY 1		// Use for Digispark
 //#define IS_SEMI_BURST 1	// Use for Semi/Burst Mode
-#define ENABLE_BURST 1	// Uncomment to enable burst fire
-#define ENABLE_FULLAUTO 1 // Uncomment to enable full auto
+#define ENABLE_BURST 1		// Uncomment to enable burst fire
+#define ENABLE_FULLAUTO 1	// Uncomment to enable full auto
+//#define DEBUG 1		// Debug Mode
 
 #ifdef IS_AN94
 #define BURST_CNT 2			// DO NOT TOUCH
@@ -22,7 +23,7 @@ Pins
 *******************************************************************************/
 
 // do not change!
-#define PIN_TRG 7			// Trigger
+#define PIN_TRG 2			// Trigger
 
 // set according your setup
 #define PIN_COL 1			// COL
@@ -73,6 +74,10 @@ Setup
 
 void setup() {
 
+#ifdef DEBUG
+	Serial.begin(9600);
+	Serial.println("Setting up pins");
+#endif // DEBUG
 
 	//Pin setup
 	pinMode(PIN_TRG, INPUT_PULLUP);
@@ -84,6 +89,9 @@ void setup() {
 
 	// if we had an error
 	if (errorCnt > 0) {
+#ifdef DEBUG
+		Serial.println("An error occured");
+#endif // DEBUG
 		digitalWrite(PIN_MSG, HIGH);
 		errorCnt = 0;
 	}
@@ -101,6 +109,13 @@ void setup() {
 	if (RPM_LIM > 0) {
 		rpmDelay = 60000 / RPM_LIM;
 	}
+#ifdef DEBUG
+	Serial.print("rpmDelay: ");
+	Serial.println(rpmDelay);
+	Serial.print("RPM Limit: ");
+	Serial.println(RPM_LIM);
+#endif // DEBUG
+
 }
 
 /*******************************************************************************
@@ -111,11 +126,18 @@ Loop
 void loop() {
 	if (triggerPressed) {
 
+#ifdef DEBUG
+		Serial.println("Trigger has been pressed");
+#endif // DEBUG
+
 // SEMI MODE
 		if (is_semi()) {
+#ifdef DEBUG
+			Serial.println("Semi mode");
+#endif // DEBUG
 			cycle();
 #ifdef SEMI_BURST
-			if (digitalRead(PIN_TRG) == HIGH) {
+			if (digitalRead(PIN_TRG) == LOW) {
 				for (int i = 0; i < BURST_CNT; i++) {
 					cycle();
 				}
@@ -126,6 +148,9 @@ void loop() {
 // BURST MODE
 #ifdef ENABLE_BURST
 		else if (is_burst()) {
+#ifdef DEBUG
+			Serial.println("Burst mode");
+#endif // DEBUG
 			for (int i = 0; i < BURST_CNT; i++) {
 				cycle();
 				if (RPM_LIM > 0) {
@@ -138,6 +163,9 @@ void loop() {
 // FULL AUTO MODE
 #ifdef ENABLE_FULLAUTO
 		else if (is_full()) {
+#ifdef DEBUG
+			Serial.println("Full auto mode");
+#endif // DEBUG
 #ifdef IS_AN94
 			cycle();
 			cycle();
@@ -155,6 +183,9 @@ void loop() {
 		else {
 			// we should never get here
 			// re-initalize everything
+#ifdef DEBUG
+			Serial.println("Error in loop(), trigger pressed without fire mode");
+#endif // DEBUG
 			errorCnt++;
 			setup();
 		}
@@ -170,11 +201,21 @@ Functions
 
 inline void cycle() {
 	int startCycle = millis();
+#ifdef DEBUG
+	Serial.println("Starting to cycle");
+	Serial.print("startCycle: ");
+	Serial.println(startCycle);
+#endif // DEBUG
 	digitalWrite(PIN_FET, HIGH);
-	while (colBouncer.update() && colBouncer.fell()) {
+	while (colBouncer.update() && colBouncer.rose()) {
 
 		// limiting the maximum cycle time
 		if (millis() - startCycle > MAX_CYC) {
+#ifdef DEBUG
+			Serial.print("Cycling too long: ");
+			Serial.print(millis()-startCycle);
+			Serial.println(" milliseconds");
+#endif // DEBUG
 			//error handling here
 			//re-initialize everything
 			errorCnt++;
@@ -185,6 +226,11 @@ inline void cycle() {
 	digitalWrite(PIN_FET, LOW);
 	int endCycle = millis();
 	cycleLength = endCycle - startCycle;
+#ifdef DEBUG
+	Serial.print("Cycle ends, took ");
+	Serial.print(cycleLength);
+	Serial.println(" milliseconds");
+#endif // DEBUG
 }
 
 void isr() { 
@@ -196,14 +242,14 @@ void isr() {
 	lastTrigger = currTrigger;
 }
 
-inline bool is_semi() { return digitalRead(PIN_SEM); }
+inline bool is_semi() { return !digitalRead(PIN_SEM); }
 
 #ifdef ENABLE_BURST
-inline bool is_burst() { return digitalRead(PIN_BRT); }
+inline bool is_burst() { return !digitalRead(PIN_BRT); }
 #endif // ENABLE_BURST
 
 #ifdef ENABLE_FULLAUTO
-inline bool is_full() { return digitalRead(PIN_FLA); }
+inline bool is_full() { return !digitalRead(PIN_FLA); }
 #endif // ENABLE_FULLAUTO
 
 
