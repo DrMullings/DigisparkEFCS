@@ -8,9 +8,9 @@ Settings
 #define IS_AN94	1		// Is EFCS used for Abakan
 //#define IS_ATTINY 1		// Use for Digispark
 //#define IS_SEMI_BURST 1	// Use for Semi/Burst Mode
-#define ENABLE_BURST 1		// Uncomment to enable burst fire
-#define ENABLE_FULLAUTO 1	// Uncomment to enable full auto
-//#define DEBUG 1		// Debug Mode
+//#define ENABLE_BURST 1		// Uncomment to enable burst fire
+//#define ENABLE_FULLAUTO 1	// Uncomment to enable full auto
+#define DEBUG 1		// Debug Mode
 
 #ifdef IS_AN94
 #define BURST_CNT 2			// DO NOT TOUCH
@@ -26,15 +26,15 @@ Pins
 #define PIN_TRG 2			// Trigger
 
 // set according your setup
-#define PIN_COL 1			// COL
-#define PIN_SEM 6			// Semi
-#define PIN_FET 3			// MosFet Gate
-#define PIN_BRT 4			// Burst
-#define PIN_FLA 5			// Full Auto
+#define PIN_COL 3			// COL
+#define PIN_SEM 5			// Semi
+#define PIN_FET 4			// MosFet Gate
+#define PIN_BRT 6			// Burst
+#define PIN_FLA 7			// Full Auto
 
 #ifndef IS_ATTINY
-#define PIN_BLT 6			// Bolt Stop
-#define PIN_MSG 8			// Message Pin buzzer or LED
+#define PIN_BLT 9			// Bolt Stop
+#define PIN_MSG 13			// Message Pin default onboard LED
 #endif // !IS_ATTINY
 
 
@@ -47,7 +47,7 @@ Global constants
 
 #define DEB_TRG 50			// debounce time for trigger
 #define DEB_COL 2			// debounce time for COL
-#define MAX_CYC 50			// maximum cycle time
+#define MAX_CYC 500			// maximum cycle time default 50
 
 #ifdef IS_AN94
 #define RPM_LIM 600		//do not edit
@@ -75,9 +75,12 @@ Setup
 void setup() {
 
 #ifdef DEBUG
-	Serial.begin(9600);
+	Serial.begin(115200);
 	Serial.println("Setting up pins");
 #endif // DEBUG
+
+	lastTrigger = millis();
+	triggerPressed = false;
 
 	//Pin setup
 	pinMode(PIN_TRG, INPUT_PULLUP);
@@ -102,20 +105,28 @@ void setup() {
 	//initialize Pins with LOW
 	digitalWrite(PIN_FET, LOW);
 
-	attachInterrupt(0, isr, RISING);
+	attachInterrupt(0, isr, FALLING);
 
 	// calculate RPM
 	// 60000ms(=1min) / RPM
 	if (RPM_LIM > 0) {
 		rpmDelay = 60000 / RPM_LIM;
 	}
+	
 #ifdef DEBUG
 	Serial.print("rpmDelay: ");
 	Serial.println(rpmDelay);
 	Serial.print("RPM Limit: ");
 	Serial.println(RPM_LIM);
-#endif // DEBUG
+	
+	// Test Blink
+	digitalWrite(PIN_MSG, HIGH);
+	delay(1000);
+	digitalWrite(PIN_MSG, LOW);
 
+	Serial.println("Setup done \n");
+#endif // DEBUG
+	
 }
 
 /*******************************************************************************
@@ -206,9 +217,11 @@ inline void cycle() {
 	Serial.print("startCycle: ");
 	Serial.println(startCycle);
 #endif // DEBUG
-	digitalWrite(PIN_FET, HIGH);
-	while (colBouncer.update() && colBouncer.rose()) {
 
+	digitalWrite(PIN_FET, HIGH);
+
+	do {
+		colBouncer.update();
 		// limiting the maximum cycle time
 		if (millis() - startCycle > MAX_CYC) {
 #ifdef DEBUG
@@ -222,8 +235,10 @@ inline void cycle() {
 			setup();
 			break;
 		}
-	}
+	} while (!colBouncer.rose());
+
 	digitalWrite(PIN_FET, LOW);
+
 	int endCycle = millis();
 	cycleLength = endCycle - startCycle;
 #ifdef DEBUG
@@ -234,15 +249,20 @@ inline void cycle() {
 }
 
 void isr() { 
+
+#ifdef DEBUG
+	Serial.println("Interrupt caught");
+#endif // DEBUG
+
 	int currTrigger = millis();
 	// debouncing
-	if (currTrigger - lastTrigger < DEB_TRG) {
+	if (currTrigger - lastTrigger > DEB_TRG) {
 		triggerPressed = true;
 	}
 	lastTrigger = currTrigger;
 }
 
-inline bool is_semi() { return !digitalRead(PIN_SEM); }
+inline bool is_semi() { return !(digitalRead(PIN_SEM)); }
 
 #ifdef ENABLE_BURST
 inline bool is_burst() { return !digitalRead(PIN_BRT); }
