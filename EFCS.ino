@@ -1,16 +1,18 @@
 #include "Arduino.h"
 #include "Bounce2-master\Bounce2.h"
+#include "avr\interrupt.h"
+#include "avr\sleep.h"
 
 /*******************************************************************************
 Settings
 *******************************************************************************/
 
-#define IS_AN94	1		// Is EFCS used for Abakan
-//#define IS_ATTINY 1		// Use for Digispark
-//#define IS_SEMI_BURST 1	// Use for Semi/Burst Mode
+//#define IS_AN94	1			// Is EFCS used for Abakan
+//#define IS_ATTINY 1			// Use for Digispark
+//#define IS_SEMI_BURST 1		// Use for Semi/Burst Mode
 //#define ENABLE_BURST 1		// Uncomment to enable burst fire
-//#define ENABLE_FULLAUTO 1	// Uncomment to enable full auto
-#define DEBUG 1		// Debug Mode
+//#define ENABLE_FULLAUTO 1		// Uncomment to enable full auto
+//#define DEBUG 1				// Debug Mode
 
 #ifdef IS_AN94
 #define BURST_CNT 2			// DO NOT TOUCH
@@ -105,7 +107,7 @@ void setup() {
 	//initialize Pins with LOW
 	digitalWrite(PIN_FET, LOW);
 
-	attachInterrupt(0, isr, FALLING);
+	attachInterrupt(0, isr_fire, FALLING);
 
 	// calculate RPM
 	// 60000ms(=1min) / RPM
@@ -136,7 +138,7 @@ Loop
 
 void loop() {
 	if (triggerPressed) {
-
+		detachInterrupt(0);
 #ifdef DEBUG
 		Serial.println("Trigger has been pressed");
 #endif // DEBUG
@@ -201,7 +203,21 @@ void loop() {
 			setup();
 		}
 		// reset trigger
-		triggerPressed = false;
+		attachInterrupt(0, isr_fire, FALLING);
+		triggerPressed = false;		
+	}
+
+	else if (is_safe()) {
+		// energy saving here
+		// maybe sleep?
+		
+		//enable pin change interrupt on VECT2 0-8
+
+	}
+
+	else {
+		// trigger not pressed for longer time?
+		// maybe sleep?
 	}
 }
 
@@ -248,7 +264,7 @@ inline void cycle() {
 #endif // DEBUG
 }
 
-void isr() { 
+void isr_fire() { 
 
 #ifdef DEBUG
 	Serial.println("Interrupt caught");
@@ -262,14 +278,16 @@ void isr() {
 	lastTrigger = currTrigger;
 }
 
-inline bool is_semi() { return !(digitalRead(PIN_SEM)); }
+inline volatile bool is_safe() { return !(digitalRead(PIN_SEM) && digitalRead(PIN_BRT) && digitalRead(PIN_FLA)); }
+
+inline volatile bool is_semi() { return !(digitalRead(PIN_SEM)); }
 
 #ifdef ENABLE_BURST
-inline bool is_burst() { return !digitalRead(PIN_BRT); }
+inline volatile bool is_burst() { return !digitalRead(PIN_BRT); }
 #endif // ENABLE_BURST
 
 #ifdef ENABLE_FULLAUTO
-inline bool is_full() { return !digitalRead(PIN_FLA); }
+inline volatile bool is_full() { return !digitalRead(PIN_FLA); }
 #endif // ENABLE_FULLAUTO
 
 
